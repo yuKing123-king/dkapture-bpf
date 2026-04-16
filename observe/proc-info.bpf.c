@@ -309,18 +309,15 @@ static struct static_key_false *context_tracking_key = NULL;
 
 static __always_inline bool context_tracking_enabled(void)
 {
-	if (CONFIG_CONTEXT_TRACKING_USER)
-	{
-		if (!context_tracking_key)
-		{
-			return false;
-		}
-		return !!BPF_CORE_READ(context_tracking_key, key.enabled.counter);
-	}
-	else
+#if defined(CONFIG_CONTEXT_TRACKING_USER) && CONFIG_CONTEXT_TRACKING_USER
+	if (!context_tracking_key)
 	{
 		return false;
 	}
+	return !!BPF_CORE_READ(context_tracking_key, key.enabled.counter);
+#else
+	return false;
+#endif
 }
 
 static inline bool vtime_accounting_enabled(void)
