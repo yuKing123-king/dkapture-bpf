@@ -39,6 +39,7 @@ class DKapture
 		PROC_PID_traffic,	// /proc/<pid>/traffic
 		PROC_PID_SCHEDSTAT, // /proc/<pid>/schedstat
 		PROC_PID_FD,		// /proc/<pid>/fd
+		PROC_PID_VMA_FILE,	// file-backed /proc/<pid>/maps entries
 		PROC_PID_STATUS,	// /proc/<pid>/status
 		PROC_PID_NET,		// /proc/<pid>/net
 		PROC_PID_CMDLINE,	// /proc/<pid>/cmdline
@@ -405,10 +406,23 @@ struct ProcPidFd
 	/**
 	 * /proc/pid/fd 下都是软连接，以下信息均属于被链接的目标文件
 	 */
-	unsigned long inode; // 目标文件的inode编号
-	int fd;				 // 文件描述符编号
-	dev_t dev;			 // 目标文件所在设备编号
-	mode_t i_mode; // 目标文件模式属性，同 stat 系统调用返回的 st_mode 字段
+	unsigned long long inode; // 目标文件的inode编号
+	int fd;					  // 文件描述符编号
+	unsigned int dev;		  // 目标文件所在设备编号
+	unsigned int i_mode; // 目标文件模式属性，同 stat 系统调用返回的 st_mode 字段
+};
+
+/**
+ * 进程地址空间中由文件支撑的 VMA 信息。
+ * 对于回调模式，每个 file-backed VMA 会回调一次。
+ */
+struct ProcPidVmaFile
+{
+	unsigned long long inode; // 映射文件的 inode 编号
+	unsigned int dev;		   // 映射文件所在设备编号
+	unsigned int i_mode; // 映射文件模式属性，同 stat 系统调用返回的 st_mode 字段
+	unsigned long long start; // VMA 起始地址
+	unsigned long long end;	 // VMA 结束地址
 };
 
 struct ProcPidSchedstat

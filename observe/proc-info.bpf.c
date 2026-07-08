@@ -858,19 +858,8 @@ int dump_task_file(struct bpf_iter__task_file *ctx)
 		return 0;
 	}
 
-	/**
-	 * 仅用于验证 bpf_iter__task_file 是以进程为单位进行迭代的
-	 */
-	if (0 && task->pid != task->tgid)
-	{
-		/**
-		 * logically never get here
-		 */
-		bpf_info("sub thread passed: tid(%d) tgid(%d)", task->pid, task->tgid);
-		return 0;
-	}
-
 	skip_kthread(task);
+	thread_leader_only(task);
 	size_t dsz;
 	struct DataHdr *hdr;
 	struct ProcPidFd *fd;
@@ -888,7 +877,7 @@ int dump_task_file(struct bpf_iter__task_file *ctx)
 	fd->i_mode = ino->i_mode;
 	fd->fd = ctx->fd;
 	fd->inode = ino->i_ino;
-	fd->dev = ino->i_sb->s_dev;
+	fd->dev = file->f_path.mnt->mnt_sb->s_dev;
 
 	// 打印 fd 的所有字段
 	DEBUG(
@@ -908,6 +897,52 @@ int dump_task_file(struct bpf_iter__task_file *ctx)
 	);
 	bpf_ringbuf_submit(hdr, 0);
 
+	return 0;
+}
+
+SEC("iter/task_vma")
+int dump_task_vma(struct bpf_iter__task_vma *ctx)
+{
+	struct task_struct *task = ctx->task;
+	struct vm_area_struct *vma = ctx->vma;
+	struct file *file;
+	size_t dsz;
+	struct DataHdr *hdr;
+	struct ProcPidVmaFile *vma_file;
+	struct inode *ino;
+
+	if (!task || !vma)
+	{
+		return 0;
+	}
+
+	skip_kthread(task);
+	thread_leader_only(task);
+
+	file = vma->vm_file;
+	if (!file)
+	{
+		return 0;
+	}
+
+	dsz = sizeof(struct DataHdr) + sizeof(struct ProcPidVmaFile);
+	hdr = (struct DataHdr *)bpf_ringbuf_reserve(&dk_shared_mem, dsz, 0);
+	if (!hdr)
+	{
+		bpf_err("ringbuf allocation failure");
+		return 1;
+	}
+
+	fill_hdr(hdr, task, dsz, PROC_PID_VMA_FILE);
+	vma_file = (typeof(vma_file))hdr->data;
+	ino = file->f_inode;
+	vma_file->i_mode = ino->i_mode;
+	vma_file->inode = ino->i_ino;
+	vma_file->dev = file->f_path.mnt->mnt_sb->s_dev;
+	vma_file->start = vma->vm_start;
+	vma_file->end = vma->vm_end;
+
+	bpf_ringbuf_submit(hdr, 0);
 	return 0;
 }
 
